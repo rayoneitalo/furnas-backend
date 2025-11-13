@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common'
 
-import { PrismaModule } from '../prisma/prisma.module';
-import { ListStateController } from './list-state.controller';
-import { ListStateService } from './list-state.service';
+import { PrismaModule } from '../prisma/prisma.module'
+import { ListStateController } from './list-state.controller'
+import { ListStateService } from './list-state.service'
 
 @Module({
   imports: [PrismaModule],

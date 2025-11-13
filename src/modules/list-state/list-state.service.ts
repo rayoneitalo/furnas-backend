@@ -1,35 +1,45 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common'
 
-import { ListState } from '@prisma/client';
-import { getNextMondayMidnight } from '../../common/utils/date.utils';
-import { PrismaService } from '../prisma/prisma.service';
+import { ListState } from '@prisma/client'
+import {
+  getCurrentWeekListOpening,
+  getListClosingFromOpening,
+  getNextWeekListOpening,
+} from '../../common/utils/date.utils'
+import { PrismaService } from '../prisma/prisma.service'
 
 @Injectable()
 export class ListStateService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getState(): Promise<ListState | null> {
-    return this.prisma.listState.findUnique({ where: { id: 1 } });
+    return this.prisma.listState.findUnique({ where: { id: 1 } })
   }
 
   async reset(): Promise<ListState> {
-    const nextMonday = getNextMondayMidnight();
+    const now = new Date()
+    const currentOpening = getCurrentWeekListOpening(now)
+    const currentClosing = getListClosingFromOpening(currentOpening)
+    const targetOpening =
+      now > currentClosing
+        ? getNextWeekListOpening(currentOpening)
+        : currentOpening
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.player.deleteMany();
+      await tx.player.deleteMany()
 
       return tx.listState.upsert({
         where: { id: 1 },
         create: {
           id: 1,
-          listOpenTimestamp: nextMonday,
+          listOpenTimestamp: targetOpening,
           listResetCount: 0,
         },
         update: {
-          listOpenTimestamp: nextMonday,
+          listOpenTimestamp: targetOpening,
           listResetCount: { increment: 1 },
         },
-      });
-    });
+      })
+    })
   }
 }
