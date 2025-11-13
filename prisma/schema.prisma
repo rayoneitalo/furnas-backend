@@ -1,0 +1,92 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// Este arquivo é a modelagem de dados para o Prisma ORM.
+// Utilize PostgreSQL ou outro banco relacional para garantir
+// o suporte robusto a transações necessárias (RN-007).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enum para os perfis de jogador (RN-005)
+enum PlayerProfile {
+  LINHA
+  GOLEIRO
+  RESENHA
+}
+
+// Enum para o status na lista (RN-002, RN-003)
+enum ListStatus {
+  MAIN     // Lista Principal (Titular)
+  WAITLIST // Lista de Espera
+}
+
+enum InviteStatus {
+  PENDING
+  USED
+  EXPIRED
+}
+
+// Modelo principal para o registro de um jogador na lista.
+model Player {
+  id                String   @id @default(uuid())
+  // CRÍTICO: Para usar @default(uuid()) no PostgreSQL, a extensão 'uuid-ossp' deve estar
+  // habilitada no seu banco de dados (run: CREATE EXTENSION "uuid-ossp";)
+  // OU você deve estar em uma versão 13+ que usa gen_random_uuid().
+  userId            String   @unique // Garante 1 inscrição por usuário
+  name              String
+  profile           PlayerProfile
+  // Status atual na lista (MAIN ou WAITLIST)
+  status            ListStatus
+  // Carimbo de data/hora para a ordem de entrada (RN-004, RN-008)
+  joinTimestamp     DateTime @default(now())
+  // Flag para convidados (RN-012)
+  isGuest           Boolean  @default(false)
+  // === Relação de Convite (RN-012) ===
+  invitedByPlayerId String?
+  // Relação auto-referenciada para o jogador que convidou
+  invitedBy         Player?  @relation("Invitations", fields: [invitedByPlayerId], references: [id], onDelete: SetNull)
+  // Lista de jogadores convidados por este jogador
+  guests            Player[] @relation("Invitations")
+  invites           Invite[]
+  acceptedInvite    Invite?  @relation("InviteAcceptedPlayer")
+
+  @@index([status, joinTimestamp]) // Índices para consultas de status e ordenação FIFO
+}
+
+model Invite {
+  id                String        @id @default(uuid())
+  token             String        @unique
+  invitedByPlayerId String?
+  invitedByUserId   String
+  status            InviteStatus  @default(PENDING)
+  createdAt         DateTime      @default(now())
+  expiresAt         DateTime
+  usedAt            DateTime?
+  acceptedPlayerId  String?       @unique
+
+  invitedBy         Player?       @relation(fields: [invitedByPlayerId], references: [id], onDelete: SetNull)
+  acceptedPlayer    Player?       @relation("InviteAcceptedPlayer", fields: [acceptedPlayerId], references: [id], onDelete: SetNull)
+
+  @@index([invitedByUserId])
+  @@index([status, expiresAt])
+}
+
+// Modelo de registro único para o estado global da lista (RN-015)
+model ListState {
+  // Garantimos que só haverá um registro.
+  id                Int      @id @default(1)
+  // Timestamp de abertura da lista (usado para calcular a janela de convite de 48h)
+  listOpenTimestamp DateTime
+  // Contador para controle de resets (opcional, mas útil)
+  listResetCount    Int      @default(0)
+}
