@@ -3,9 +3,9 @@ import { IsString, MaxLength } from 'class-validator'
 
 export class RemovePlayerDto {
   @ApiProperty({
-    description: 'Identificador do usuário que realizou a inscrição.',
+    description: 'Número do RG do jogador para confirmar a remoção.',
   })
   @IsString()
-  @MaxLength(255)
-  userId: string
+  @MaxLength(20)
+  rg: string
 }

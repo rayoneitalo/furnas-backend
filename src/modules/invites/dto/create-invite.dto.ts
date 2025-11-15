@@ -3,10 +3,10 @@ import { IsString, MaxLength } from 'class-validator'
 
 export class CreateInviteDto {
   @ApiProperty({
-    description:
-      'Identificador do usuário titular que está enviando o convite.',
+    description: 'RG do jogador titular que está gerando o convite.',
+    example: '12.345.678-9',
   })
   @IsString()
-  @MaxLength(255)
-  hostUserId: string
+  @MaxLength(20)
+  rg: string
 }

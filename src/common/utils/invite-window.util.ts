@@ -1,13 +1,19 @@
+import { fromZonedTime, toZonedTime } from 'date-fns-tz'
 import {
   INVITE_WINDOW_END,
   INVITE_WINDOW_START,
 } from '../rules/functional-rules'
 
-const minutesSinceMidnight = (date: Date): number =>
-  date.getHours() * 60 + date.getMinutes()
+const TIMEZONE = 'America/Sao_Paulo'
+
+const minutesSinceMidnight = (date: Date): number => {
+  const saoPauloTime = toZonedTime(date, TIMEZONE)
+  return saoPauloTime.getHours() * 60 + saoPauloTime.getMinutes()
+}
 
 export const isWithinInviteWindow = (now: Date): boolean => {
-  const currentDay = now.getDay()
+  const saoPauloTime = toZonedTime(now, TIMEZONE)
+  const currentDay = saoPauloTime.getDay()
   const currentMinutes = minutesSinceMidnight(now)
 
   const startMinutes =
@@ -44,8 +50,9 @@ export const isWithinInviteWindow = (now: Date): boolean => {
 }
 
 export const getInviteWindowEndDate = (now: Date = new Date()): Date => {
-  const end = new Date(now)
-  const currentDay = now.getDay()
+  const saoPauloTime = toZonedTime(now, TIMEZONE)
+  const end = new Date(saoPauloTime)
+  const currentDay = saoPauloTime.getDay()
   const endMinutes = INVITE_WINDOW_END.hour * 60 + INVITE_WINDOW_END.minute
   const currentMinutes = minutesSinceMidnight(now)
 
@@ -56,14 +63,20 @@ export const getInviteWindowEndDate = (now: Date = new Date()): Date => {
 
   end.setDate(end.getDate() + daysToAdd)
   end.setHours(INVITE_WINDOW_END.hour, INVITE_WINDOW_END.minute, 0, 0)
-  return end
+  
+  // Converte de volta para UTC
+  return fromZonedTime(end, TIMEZONE)
 }
 
 export const calculateInviteExpiration = (
   now: Date = new Date(),
   validityHours = 48,
 ): Date => {
-  const candidate = new Date(now.getTime() + validityHours * 60 * 60 * 1000)
+  const saoPauloTime = toZonedTime(now, TIMEZONE)
+  const candidate = new Date(saoPauloTime.getTime() + validityHours * 60 * 60 * 1000)
   const windowEnd = getInviteWindowEndDate(now)
-  return candidate < windowEnd ? candidate : windowEnd
+  
+  // Converte candidate de volta para UTC
+  const candidateUTC = fromZonedTime(candidate, TIMEZONE)
+  return candidateUTC < windowEnd ? candidateUTC : windowEnd
 }

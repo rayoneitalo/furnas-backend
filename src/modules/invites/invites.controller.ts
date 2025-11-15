@@ -10,16 +10,13 @@ import { InvitesService } from './invites.service'
 export class InvitesController {
   constructor(private readonly invitesService: InvitesService) {}
 
-  @Post('players/:playerId/invites')
+  @Post('invites/create')
   @ApiOperation({
-    summary: 'Gera um novo link de convite para um jogador titular.',
+    summary: 'Gera um novo link de convite para um jogador titular usando o RG.',
   })
   @ApiResponse({ status: 201, description: 'Convite gerado com sucesso.' })
-  createInvite(
-    @Param('playerId') playerId: string,
-    @Body() dto: CreateInviteDto,
-  ) {
-    return this.invitesService.createInvite(playerId, dto)
+  createInvite(@Body() dto: CreateInviteDto) {
+    return this.invitesService.createInvite(dto)
   }
 
   @Post('invites/accept')

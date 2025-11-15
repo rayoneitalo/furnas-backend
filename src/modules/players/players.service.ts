@@ -17,26 +17,34 @@ export class PlayersService {
 
   async create(dto: CreatePlayerDto): Promise<PlayerModel> {
     const existing = await this.prisma.player.findUnique({
-      where: { userId: dto.userId },
+      where: { rg: dto.rg },
     })
 
     if (existing) {
       throw new ConflictException(
-        'The user already has an active entry in the list.',
+        'A player with this RG already has an active entry in the list.',
       )
     }
 
+    // Para calcular a capacidade da lista principal, exclui jogadores com perfil RESENHA
     const mainCount = await this.prisma.player.count({
-      where: { status: ListStatus.MAIN },
+      where: { 
+        status: ListStatus.MAIN,
+        profile: { not: 'RESENHA' }, // Não conta RESENHA na lista principal
+      },
     })
 
+    // Jogadores RESENHA sempre vão para MAIN (não ocupam vaga), outros seguem a lógica normal
     const status =
-      mainCount < MAIN_LIST_CAPACITY ? ListStatus.MAIN : ListStatus.WAITLIST
+      dto.profile === 'RESENHA' || mainCount < MAIN_LIST_CAPACITY
+        ? ListStatus.MAIN
+        : ListStatus.WAITLIST
 
     return this.prisma.player.create({
       data: {
         name: dto.name,
-        userId: dto.userId,
+        rg: dto.rg,
+        phone: dto.phone,
         profile: dto.profile,
         status,
         isGuest: false,
@@ -53,9 +61,9 @@ export class PlayersService {
       throw new NotFoundException('Player not found.')
     }
 
-    if (player.userId !== dto.userId) {
+    if (player.rg !== dto.rg) {
       throw new ForbiddenException(
-        'You do not have permission to remove this player.',
+        'You do not have permission to remove this player. RG does not match.',
       )
     }
 
@@ -63,8 +71,12 @@ export class PlayersService {
       await this.prisma.$transaction(async (tx) => {
         await tx.player.delete({ where: { id: playerId } })
 
+        // Promove o próximo da lista de espera, excluindo jogadores com perfil RESENHA
         const promotionCandidate = await tx.player.findFirst({
-          where: { status: ListStatus.WAITLIST },
+          where: { 
+            status: ListStatus.WAITLIST,
+            profile: { not: 'RESENHA' }, // Não promove RESENHA
+          },
           orderBy: { joinTimestamp: 'asc' },
         })
 
@@ -104,19 +116,21 @@ export class PlayersService {
   }
 
   async listCurrentPlayers(): Promise<
-    Array<{
-      name: string
-      isGuest: boolean
-      invitedBy?: { name: string; userId: string }
-    }>
+    Array<PlayerModel & { invitedBy?: { name: string; userId: string } }>
   > {
     const players = await this.prisma.player.findMany({
       orderBy: [{ status: 'asc' }, { joinTimestamp: 'asc' }],
       select: {
+        id: true,
+        userId: true,
         name: true,
-        isGuest: true,
+        rg: true,
+        phone: true,
+        profile: true,
         status: true,
         joinTimestamp: true,
+        isGuest: true,
+        invitedByPlayerId: true,
         invitedBy: {
           select: {
             name: true,
@@ -132,15 +146,24 @@ export class PlayersService {
           return a.joinTimestamp.getTime() - b.joinTimestamp.getTime()
         }
 
+        // Ordena: MAIN primeiro, depois WAITLIST
         return a.status === ListStatus.MAIN ? -1 : 1
       })
-      .map(({ name, isGuest, invitedBy }) => ({
-        name,
-        isGuest,
-        invitedBy: invitedBy
+      .map((player) => ({
+        id: player.id,
+        userId: player.userId,
+        name: player.name,
+        rg: player.rg,
+        phone: player.phone,
+        profile: player.profile,
+        status: player.status,
+        joinTimestamp: player.joinTimestamp,
+        isGuest: player.isGuest,
+        invitedByPlayerId: player.invitedByPlayerId,
+        invitedBy: player.invitedBy
           ? {
-              name: invitedBy.name,
-              userId: invitedBy.userId,
+              name: player.invitedBy.name,
+              userId: player.invitedBy.userId,
             }
           : undefined,
       }))

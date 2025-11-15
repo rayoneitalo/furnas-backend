@@ -42,8 +42,10 @@ model Player {
   // CRÍTICO: Para usar @default(uuid()) no PostgreSQL, a extensão 'uuid-ossp' deve estar
   // habilitada no seu banco de dados (run: CREATE EXTENSION "uuid-ossp";)
   // OU você deve estar em uma versão 13+ que usa gen_random_uuid().
-  userId            String   @unique // Garante 1 inscrição por usuário
+  userId            String   @unique @default(uuid()) // UUID gerado automaticamente
   name              String
+  rg                String   @unique // RG único para garantir 1 inscrição por pessoa
+  phone             String   // Telefone celular no formato (99)99999-9999
   profile           PlayerProfile
   // Status atual na lista (MAIN ou WAITLIST)
   status            ListStatus
@@ -61,6 +63,7 @@ model Player {
   acceptedInvite    Invite?  @relation("InviteAcceptedPlayer")
 
   @@index([status, joinTimestamp]) // Índices para consultas de status e ordenação FIFO
+  @@index([rg]) // Índice para busca rápida por RG
 }
 
 model Invite {

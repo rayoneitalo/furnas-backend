@@ -39,10 +39,7 @@ export class InvitesService {
     })
   }
 
-  async createInvite(
-    hostPlayerId: string,
-    dto: CreateInviteDto,
-  ): Promise<{ token: string; expiresAt: Date }> {
+  async createInvite(dto: CreateInviteDto): Promise<{ token: string; expiresAt: Date }> {
     const now = new Date()
 
     if (!isWithinInviteWindow(now)) {
@@ -52,20 +49,16 @@ export class InvitesService {
     const result = await this.prisma.$transaction(async (tx) => {
       await this.expireOutdatedInvites(now, tx)
 
-      const host = await tx.player.findUnique({ where: { id: hostPlayerId } })
+      const host = await tx.player.findUnique({ where: { rg: dto.rg } })
 
       if (!host) {
-        throw new NotFoundException('Host player not found.')
-      }
-
-      if (host.userId !== dto.hostUserId) {
-        throw new ForbiddenException(
-          'You are not allowed to generate invites for this player.',
-        )
+        throw new NotFoundException('Player not found with this RG.')
       }
 
       if (host.isGuest) {
-        throw new BadRequestException('Guests cannot generate invites.')
+        throw new BadRequestException(
+          'Guests cannot generate invites. Only main list players can create invite links.',
+        )
       }
 
       if (host.status !== ListStatus.MAIN) {
@@ -138,11 +131,11 @@ export class InvitesService {
       }
 
       const existingPlayer = await tx.player.findUnique({
-        where: { userId: dto.userId },
+        where: { rg: dto.rg },
       })
 
       if (existingPlayer) {
-        throw new ConflictException('This user already has an active entry.')
+        throw new ConflictException('A player with this RG already has an active entry.')
       }
 
       if (invite.invitedByPlayerId) {
@@ -157,17 +150,25 @@ export class InvitesService {
         }
       }
 
+      // Para calcular a capacidade da lista principal, exclui jogadores com perfil RESENHA
       const mainCount = await tx.player.count({
-        where: { status: ListStatus.MAIN },
+        where: { 
+          status: ListStatus.MAIN,
+          profile: { not: 'RESENHA' }, // Não conta RESENHA na lista principal
+        },
       })
 
+      // Jogadores RESENHA sempre vão para MAIN (não ocupam vaga), outros seguem a lógica normal
       const status =
-        mainCount < MAIN_LIST_CAPACITY ? ListStatus.MAIN : ListStatus.WAITLIST
+        dto.profile === 'RESENHA' || mainCount < MAIN_LIST_CAPACITY
+          ? ListStatus.MAIN
+          : ListStatus.WAITLIST
 
       const createdPlayer = await tx.player.create({
         data: {
           name: dto.name,
-          userId: dto.userId,
+          rg: dto.rg,
+          phone: dto.phone,
           profile: dto.profile,
           status,
           isGuest: true,
