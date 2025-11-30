@@ -9,4 +9,4 @@ import { PrismaModule } from './modules/prisma/prisma.module'
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule { }

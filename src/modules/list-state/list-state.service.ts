@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 
-import { ListState } from '@prisma/client'
+import { ListState } from 'prisma/generated/client'
 import {
   getCurrentWeekListOpening,
   getListClosingFromOpening,

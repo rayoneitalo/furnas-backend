@@ -1,11 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { InviteStatus, ListStatus, Prisma } from '@prisma/client'
+import { InviteStatus, ListStatus, Prisma } from 'prisma/generated/client'
 import { randomUUID } from 'node:crypto'
 
 import {
@@ -76,7 +75,7 @@ export class InvitesService {
           invitedByPlayerId: host.id,
           status: InviteStatus.PENDING,
         },
-      })
+      }) as number
 
       if (guestCount + pendingInvites >= MAX_GUESTS_PER_PLAYER) {
         throw new BadRequestException('Invite limit reached for this player.')
