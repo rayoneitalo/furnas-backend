@@ -8,7 +8,7 @@ export const LIST_OPEN_TIME = {
 } // RN-G03
 
 export const INVITE_WINDOW_START = {
-  dayOfWeek: 2, // Tuesday (0 = Sunday)
+  dayOfWeek: 0, // Sunday (0 = Sunday) — temp: changed from Tuesday for testing
   hour: 0,
   minute: 0,
 } // RN-G04
