@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
@@ -10,6 +10,12 @@ import { InvitesService } from './invites.service'
 @Controller()
 export class InvitesController {
   constructor(private readonly invitesService: InvitesService) {}
+
+  @Get('invites/window')
+  @ApiOperation({ summary: 'Retorna se a janela de convites está aberta.' })
+  getInviteWindow() {
+    return this.invitesService.getInviteWindowStatus()
+  }
 
   @Post('invites/create')
   @UseGuards(JwtAuthGuard)

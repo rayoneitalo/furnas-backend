@@ -13,6 +13,7 @@ import {
 } from '../../common/rules/functional-rules'
 import {
   calculateInviteExpiration,
+  getInviteWindowEndDate,
   isWithinInviteWindow,
 } from '../../common/utils/invite-window.util'
 import { PrismaService } from '../prisma/prisma.service'
@@ -22,6 +23,12 @@ import { CreateInviteDto } from './dto/create-invite.dto'
 @Injectable()
 export class InvitesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  getInviteWindowStatus(): { open: boolean; windowEnd: Date | null } {
+    const now = new Date()
+    const open = isWithinInviteWindow(now)
+    return { open, windowEnd: open ? getInviteWindowEndDate(now) : null }
+  }
 
   private async expireOutdatedInvites(
     now: Date,
