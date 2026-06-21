@@ -5,11 +5,10 @@
       "src": "api/index.ts",
       "use": "@vercel/node",
       "config": {
-        "bundle": false,
         "includeFiles": [
           "prisma/generated/**",
           "prisma/schema.prisma",
-          "src/**"
+          "tsconfig.json"
         ]
       }
     }
