@@ -1,6 +1,7 @@
-import { Body, Controller, Param, Post } from '@nestjs/common'
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Post, UseGuards } from '@nestjs/common'
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { AcceptInviteDto } from './dto/accept-invite.dto'
 import { CreateInviteDto } from './dto/create-invite.dto'
 import { InvitesService } from './invites.service'
@@ -11,6 +12,8 @@ export class InvitesController {
   constructor(private readonly invitesService: InvitesService) {}
 
   @Post('invites/create')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Gera um novo link de convite para um jogador titular usando o RG.',
   })

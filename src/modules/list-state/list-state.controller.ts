@@ -1,6 +1,7 @@
-import { Controller, Get, Post } from '@nestjs/common'
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Controller, Get, Post, UseGuards } from '@nestjs/common'
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { ListStateService } from './list-state.service'
 
 @ApiTags('list-state')
@@ -19,6 +20,8 @@ export class ListStateController {
   }
 
   @Post('reset')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Reseta a lista e define o próximo horário de abertura.',
   })

@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common'
-import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common'
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CreatePlayerDto } from './dto/create-player.dto'
 import { RemovePlayerDto } from './dto/remove-player.dto'
 import { PlayersService } from './players.service'
@@ -27,6 +28,8 @@ export class PlayersController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove um jogador da lista.' })
   @ApiBody({ type: RemovePlayerDto })
   @ApiResponse({ status: 200, description: 'Jogador removido com sucesso.' })

@@ -1,41 +1,47 @@
 import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
+import { ExpressAdapter } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { AppModule } from './app.module'
+import express from 'express'
+import type { Request, Response } from 'express'
+
+import { AppModule } from '../src/app.module'
+
+const expressApp = express()
+let ready = false
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  if (ready) return
+
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+    logger: ['error', 'warn'],
+  })
+
+  const frontendUrl = process.env.FRONTEND_URL
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3001',
-      'http://localhost:3000',
-      'http://127.0.0.1:3001',
-      'http://127.0.0.1:3000',
-    ],
+    origin: frontendUrl ? [frontendUrl, 'http://localhost:3000'] : true,
     credentials: true,
   })
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      transformOptions: { enableImplicitConversion: true },
     }),
   )
 
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('Furnas API')
-    .setDescription('API para gerenciamento da lista de jogadores. Faça login em **POST /auth/login**, execute, e o token será aplicado automaticamente.')
+    .setDescription('API para gerenciamento da lista de jogadores. Faça login em **POST /auth/login** e o token será aplicado automaticamente.')
     .setVersion('1.0.0')
     .addBearerAuth()
     .build()
-  const document = SwaggerModule.createDocument(app, config)
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig)
   SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
+    swaggerOptions: { persistAuthorization: true },
     customJsStr: `
       window.addEventListener('load', function () {
         var check = setInterval(function () {
@@ -55,9 +61,7 @@ async function bootstrap() {
                       },
                     });
                   }
-                } catch (e) {
-                  console.error('Swagger auto-auth error:', e);
-                }
+                } catch (e) {}
               }
               return response;
             },
@@ -67,6 +71,11 @@ async function bootstrap() {
     `,
   })
 
-  await app.listen(process.env.PORT ?? 3000)
+  await app.init()
+  ready = true
 }
-bootstrap()
+
+export default async function handler(req: Request, res: Response) {
+  await bootstrap()
+  expressApp(req, res)
+}
