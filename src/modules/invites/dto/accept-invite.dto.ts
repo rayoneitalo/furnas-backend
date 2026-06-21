@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { PlayerProfile } from 'prisma/generated/client'
+import { PlayerProfile } from '@prisma/client'
 import { IsEnum, IsString, IsUUID, Matches, MaxLength } from 'class-validator'
 
 export class AcceptInviteDto {

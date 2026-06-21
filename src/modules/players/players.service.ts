@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 
-import { ListStatus, Player as PlayerModel } from 'prisma/generated/client'
+import { ListStatus, Player as PlayerModel } from '@prisma/client'
 import { MAIN_LIST_CAPACITY } from '../../common/rules/functional-rules'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePlayerDto } from './dto/create-player.dto'
