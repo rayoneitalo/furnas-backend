@@ -67,28 +67,20 @@ export class PlayersService {
       )
     }
 
+    await this.prisma.player.delete({ where: { id: playerId } })
+
     if (player.status === ListStatus.MAIN) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.player.delete({ where: { id: playerId } })
-
-        // Promove o próximo da lista de espera, excluindo jogadores com perfil RESENHA
-        const promotionCandidate = await tx.player.findFirst({
-          where: { 
-            status: ListStatus.WAITLIST,
-            profile: { not: 'RESENHA' }, // Não promove RESENHA
-          },
-          orderBy: { joinTimestamp: 'asc' },
-        })
-
-        if (promotionCandidate) {
-          await tx.player.update({
-            where: { id: promotionCandidate.id },
-            data: { status: ListStatus.MAIN },
-          })
-        }
+      const promotionCandidate = await this.prisma.player.findFirst({
+        where: { status: ListStatus.WAITLIST, profile: { not: 'RESENHA' } },
+        orderBy: { joinTimestamp: 'asc' },
       })
-    } else {
-      await this.prisma.player.delete({ where: { id: playerId } })
+
+      if (promotionCandidate) {
+        await this.prisma.player.update({
+          where: { id: promotionCandidate.id },
+          data: { status: ListStatus.MAIN },
+        })
+      }
     }
   }
 

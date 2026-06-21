@@ -25,21 +25,12 @@ export class ListStateService {
         ? getNextWeekListOpening(currentOpening)
         : currentOpening
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.player.deleteMany()
+    await this.prisma.player.deleteMany()
 
-      return tx.listState.upsert({
-        where: { id: 1 },
-        create: {
-          id: 1,
-          listOpenTimestamp: targetOpening,
-          listResetCount: 0,
-        },
-        update: {
-          listOpenTimestamp: targetOpening,
-          listResetCount: { increment: 1 },
-        },
-      })
+    return this.prisma.listState.upsert({
+      where: { id: 1 },
+      create: { id: 1, listOpenTimestamp: targetOpening, listResetCount: 0 },
+      update: { listOpenTimestamp: targetOpening, listResetCount: { increment: 1 } },
     })
   }
 }

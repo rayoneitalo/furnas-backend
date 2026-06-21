@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { InviteStatus, ListStatus, Prisma } from '@prisma/client'
+import { InviteStatus, ListStatus } from '@prisma/client'
 import { randomUUID } from 'node:crypto'
 
 import {
@@ -30,18 +30,10 @@ export class InvitesService {
     return { open, windowEnd: open ? getInviteWindowEndDate(now) : null }
   }
 
-  private async expireOutdatedInvites(
-    now: Date,
-    tx: Prisma.TransactionClient | PrismaService = this.prisma,
-  ): Promise<void> {
-    await tx.invite.updateMany({
-      where: {
-        status: InviteStatus.PENDING,
-        expiresAt: { lte: now },
-      },
-      data: {
-        status: InviteStatus.EXPIRED,
-      },
+  private async expireOutdatedInvites(now: Date): Promise<void> {
+    await this.prisma.invite.updateMany({
+      where: { status: InviteStatus.PENDING, expiresAt: { lte: now } },
+      data: { status: InviteStatus.EXPIRED },
     })
   }
 
@@ -52,61 +44,47 @@ export class InvitesService {
       throw new BadRequestException('Invites are not available at this time.')
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.expireOutdatedInvites(now, tx)
+    await this.expireOutdatedInvites(now)
 
-      const host = await tx.player.findUnique({ where: { rg: dto.rg } })
+    const host = await this.prisma.player.findUnique({ where: { rg: dto.rg } })
 
-      if (!host) {
-        throw new NotFoundException('Player not found with this RG.')
-      }
+    if (!host) {
+      throw new NotFoundException('Player not found with this RG.')
+    }
 
-      if (host.isGuest) {
-        throw new BadRequestException(
-          'Guests cannot generate invites. Only main list players can create invite links.',
-        )
-      }
+    if (host.isGuest) {
+      throw new BadRequestException(
+        'Guests cannot generate invites. Only main list players can create invite links.',
+      )
+    }
 
-      if (host.status !== ListStatus.MAIN) {
-        throw new BadRequestException(
-          'Only main list players can generate invites.',
-        )
-      }
+    if (host.status !== ListStatus.MAIN) {
+      throw new BadRequestException('Only main list players can generate invites.')
+    }
 
-      const guestCount = await tx.player.count({
-        where: { invitedByPlayerId: host.id },
-      })
-
-      const pendingInvites = await tx.invite.count({
-        where: {
-          invitedByPlayerId: host.id,
-          status: InviteStatus.PENDING,
-        },
-      }) as number
-
-      if (guestCount + pendingInvites >= MAX_GUESTS_PER_PLAYER) {
-        throw new BadRequestException('Invite limit reached for this player.')
-      }
-
-      const expiresAt = calculateInviteExpiration(now)
-
-      const invite = await tx.invite.create({
-        data: {
-          token: randomUUID(),
-          invitedByPlayerId: host.id,
-          invitedByUserId: host.userId,
-          expiresAt,
-        },
-        select: {
-          token: true,
-          expiresAt: true,
-        },
-      })
-
-      return invite
+    const guestCount = await this.prisma.player.count({
+      where: { invitedByPlayerId: host.id },
     })
 
-    return result
+    const pendingInvites = await this.prisma.invite.count({
+      where: { invitedByPlayerId: host.id, status: InviteStatus.PENDING },
+    })
+
+    if (guestCount + pendingInvites >= MAX_GUESTS_PER_PLAYER) {
+      throw new BadRequestException('Invite limit reached for this player.')
+    }
+
+    const expiresAt = calculateInviteExpiration(now)
+
+    return this.prisma.invite.create({
+      data: {
+        token: randomUUID(),
+        invitedByPlayerId: host.id,
+        invitedByUserId: host.userId,
+        expiresAt,
+      },
+      select: { token: true, expiresAt: true },
+    })
   }
 
   async acceptInvite(dto: AcceptInviteDto) {
@@ -116,84 +94,64 @@ export class InvitesService {
       throw new BadRequestException('Invites are not available at this time.')
     }
 
-    const player = await this.prisma.$transaction(async (tx) => {
-      await this.expireOutdatedInvites(now, tx)
+    await this.expireOutdatedInvites(now)
 
-      const invite = await tx.invite.findUnique({ where: { token: dto.token } })
+    const invite = await this.prisma.invite.findUnique({ where: { token: dto.token } })
 
-      if (!invite || invite.status !== InviteStatus.PENDING) {
-        throw new NotFoundException('Invite is invalid or already used.')
-      }
+    if (!invite || invite.status !== InviteStatus.PENDING) {
+      throw new NotFoundException('Invite is invalid or already used.')
+    }
 
-      if (invite.expiresAt <= now) {
-        await tx.invite.update({
-          where: { id: invite.id },
-          data: {
-            status: InviteStatus.EXPIRED,
-          },
-        })
-
-        throw new BadRequestException('Invite has expired.')
-      }
-
-      const existingPlayer = await tx.player.findUnique({
-        where: { rg: dto.rg },
-      })
-
-      if (existingPlayer) {
-        throw new ConflictException('A player with this RG already has an active entry.')
-      }
-
-      if (invite.invitedByPlayerId) {
-        const guestCount = await tx.player.count({
-          where: { invitedByPlayerId: invite.invitedByPlayerId },
-        })
-
-        if (guestCount >= MAX_GUESTS_PER_PLAYER) {
-          throw new BadRequestException(
-            'Guest limit reached for this host player.',
-          )
-        }
-      }
-
-      // Para calcular a capacidade da lista principal, exclui jogadores com perfil RESENHA
-      const mainCount = await tx.player.count({
-        where: { 
-          status: ListStatus.MAIN,
-          profile: { not: 'RESENHA' }, // Não conta RESENHA na lista principal
-        },
-      })
-
-      // Jogadores RESENHA sempre vão para MAIN (não ocupam vaga), outros seguem a lógica normal
-      const status =
-        dto.profile === 'RESENHA' || mainCount < MAIN_LIST_CAPACITY
-          ? ListStatus.MAIN
-          : ListStatus.WAITLIST
-
-      const createdPlayer = await tx.player.create({
-        data: {
-          name: dto.name,
-          rg: dto.rg,
-          phone: dto.phone,
-          profile: dto.profile,
-          status,
-          isGuest: true,
-          invitedByPlayerId: invite.invitedByPlayerId,
-        },
-      })
-
-      await tx.invite.update({
+    if (invite.expiresAt <= now) {
+      await this.prisma.invite.update({
         where: { id: invite.id },
-        data: {
-          status: InviteStatus.USED,
-          usedAt: now,
-          acceptedPlayerId: createdPlayer.id,
-        },
+        data: { status: InviteStatus.EXPIRED },
+      })
+      throw new BadRequestException('Invite has expired.')
+    }
+
+    const existingPlayer = await this.prisma.player.findUnique({ where: { rg: dto.rg } })
+
+    if (existingPlayer) {
+      throw new ConflictException('A player with this RG already has an active entry.')
+    }
+
+    if (invite.invitedByPlayerId) {
+      const guestCount = await this.prisma.player.count({
+        where: { invitedByPlayerId: invite.invitedByPlayerId },
       })
 
-      return createdPlayer
+      if (guestCount >= MAX_GUESTS_PER_PLAYER) {
+        throw new BadRequestException('Guest limit reached for this host player.')
+      }
+    }
+
+    const mainCount = await this.prisma.player.count({
+      where: { status: ListStatus.MAIN, profile: { not: 'RESENHA' } },
     })
 
-    return player
+    const status =
+      dto.profile === 'RESENHA' || mainCount < MAIN_LIST_CAPACITY
+        ? ListStatus.MAIN
+        : ListStatus.WAITLIST
+
+    const createdPlayer = await this.prisma.player.create({
+      data: {
+        name: dto.name,
+        rg: dto.rg,
+        phone: dto.phone,
+        profile: dto.profile,
+        status,
+        isGuest: true,
+        invitedByPlayerId: invite.invitedByPlayerId,
+      },
+    })
+
+    await this.prisma.invite.update({
+      where: { id: invite.id },
+      data: { status: InviteStatus.USED, usedAt: now, acceptedPlayerId: createdPlayer.id },
+    })
+
+    return createdPlayer
   }
 }
